@@ -114,7 +114,6 @@ import {
 
 import {
   addMemory, editMemory, saveMemory, deleteMemoryConfirm,
-  dialogImportPreview, dialogImportCommit,
 } from "./modules/memory.js";
 
 import {
@@ -343,6 +342,7 @@ window.PawzoChat = {
   emojiImportPick, emojiImportSubmit, emojiExportGroup,
   onProfileAvatarSelected, saveProfile,
   addMemory, editMemory, saveMemory, deleteMemoryConfirm,
+  dialogImportPreview, dialogImportCommit,
   step,
   mcpTransportChange,
   mcpAddEnvRow, mcpRemoveEnvRow, mcpUpdateEnvKey, mcpUpdateEnvVal,
