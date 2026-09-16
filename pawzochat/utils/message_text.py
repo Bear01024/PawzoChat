@@ -44,6 +44,8 @@ _TIME_PREFIX_RE = re.compile(
 
 _MULTI_NEWLINE_RE = re.compile(r"\n{3,}")
 
+_SILENT_MARKER_RE = re.compile(r"[（(【\[]\s*已静默\s*[）)】\]]")
+
 
 def format_message_time(timestamp: str | None = None) -> str:
     """Return a Chinese time expression like ``[2026年04月02日 星期四 13:45]``.
@@ -166,6 +168,10 @@ def clean_assistant_reply_text(text: str) -> str:
     text = text.replace("\\n", "\n")
 
     text = _TIME_PREFIX_RE.sub("", text)
+
+    text = _SILENT_MARKER_RE.sub("😊", text)
+    if text.strip() == "已静默":
+        text = "😊"
 
     text = _MULTI_NEWLINE_RE.sub("\n\n", text)
 
