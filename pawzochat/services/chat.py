@@ -235,13 +235,10 @@ class ChatService:
                 "source": "llm",
             })
 
-        if not assistant_messages:
-            assistant_messages.append({
-                "role": "assistant",
-                "content": [{"type": "text", "text": "……"}],
-                "source": "llm",
-            })
-
+        # An empty model response is intentional: persona instructions may
+        # require silence for acknowledgements or natural conversation endings.
+        # Returning no drafts lets the dispatcher finish the round without
+        # persisting or sending a synthetic fallback message.
         return assistant_messages
 
     def run_oneshot(
