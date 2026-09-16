@@ -874,7 +874,7 @@ export function showTypingIndicator() {
   if (el) el.textContent = "对方正在输入…";
 }
 
-function hideTypingIndicator() {
+export function hideTypingIndicator() {
   const pname = state.personas.find(p => p.id === chatPersonaId)?.name || chatPersonaId;
   const el = $("top-bar-title");
   if (el) el.textContent = pname;

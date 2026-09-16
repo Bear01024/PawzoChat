@@ -408,6 +408,7 @@ class MessageQueue:
                 ).start()
 
     def _process(self, persona_id: str) -> None:
+        processing_started = False
         try:
             with self._lock:
                 queue = self._queues.get(persona_id)
@@ -456,6 +457,7 @@ class MessageQueue:
                 return
 
             broadcast("processing", persona_id=persona_id)
+            processing_started = True
             logger.info("开始处理 persona=%s, %d 条待处理消息", persona_id, len(pending))
 
             try:
@@ -539,6 +541,8 @@ class MessageQueue:
                 queue = self._queues.get(persona_id)
                 if queue:
                     queue.processing = False
+            if processing_started:
+                broadcast("processing_done", persona_id=persona_id)
 
     def _check_memory_bg(self, persona_id: str, cutoff_timestamp: str):
         try:

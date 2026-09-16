@@ -106,8 +106,10 @@ def build_example_messages(examples: Iterable[dict]) -> list[dict]:
 
 
 def is_silence_reply(text: str, policy: dict) -> bool:
+    """Recognize the configured silence token without case sensitivity."""
     token = normalize_output_policy(policy).get("silence_token", "<SILENT>")
-    return bool(token) and (text or "").strip() == token
+    value = (text or "").strip()
+    return bool(token) and value.casefold() == token.casefold()
 
 
 def policy_prompt(policy: dict) -> str:

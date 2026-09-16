@@ -1,8 +1,9 @@
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from pawzochat.llm.base import LLMResponse
 from pawzochat.services.chat import ChatService
+from pawzochat.services.message_queue import MessageQueue
 from pawzochat.transport.models import Persona
 
 
@@ -38,6 +39,38 @@ class ChatServiceSilenceTests(unittest.TestCase):
         service = ChatService(store, config, llm_manager)
 
         self.assertEqual([], service.process_round(persona.id))
+
+    def test_silent_queue_always_broadcasts_processing_done(self):
+        app = Mock()
+        app.emoji_service = None
+        app.memory_service = None
+        app.chat_service.process_round.return_value = []
+        app.reply_dispatcher.deliver_messages.return_value = []
+        app.conversation_store.add_message.side_effect = (
+            lambda persona_id, role, content, source, **kwargs: {
+                "role": role,
+                "content": content,
+                "source": source,
+                "timestamp": kwargs.get("timestamp", ""),
+            }
+        )
+
+        queue = MessageQueue(app)
+        queue.enqueue(
+            "ange",
+            "你好幽默",
+            "web",
+            reply_ctx={"channel": "web"},
+        )
+
+        with patch("pawzochat.services.message_queue.broadcast") as broadcast:
+            queue._process("ange")
+
+        events = [call.args[0] for call in broadcast.call_args_list]
+        self.assertIn("processing", events)
+        self.assertEqual("processing_done", events[-1])
+
+
 
 
 if __name__ == "__main__":

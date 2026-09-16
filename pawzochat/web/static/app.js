@@ -38,7 +38,7 @@ import {
   onChatInput, onChatKey, sendChat,
   pickImage, onImageSelected, removePendingImage,
   pickFile, onFileSelected, removePendingFile,
-  showTypingIndicator, appendAssistantMessage,
+  showTypingIndicator, hideTypingIndicator, appendAssistantMessage,
   toggleEmojiPicker, switchEmojiTab, insertEmoji, sendSticker,
   togglePlusMenu,
   quoteMessage, clearPendingQuote,
@@ -234,6 +234,10 @@ function initSSE() {
       if (data.type === "assistant_message") {
         if (data.is_last) state.processingPersonas.delete(data.persona_id);
         if (data.persona_id === chatPersonaId) appendAssistantMessage(data.message, data.is_last);
+      }
+      if (data.type === "processing_done") {
+        state.processingPersonas.delete(data.persona_id);
+        if (data.persona_id === chatPersonaId) hideTypingIndicator();
       }
       if (data.type === "new_message") {
         api.invalidate(k => k.startsWith("/api/conversations"));

@@ -38,7 +38,8 @@ def test_output_policy_prefers_two_but_allows_three():
 def test_silence_token_is_a_real_empty_send_signal():
     policy = {"enabled": True, "silence_token": "<SILENT>"}
     assert is_silence_reply("<SILENT>", policy)
-    assert validate_reply("<SILENT>", policy) == []
+    assert is_silence_reply("  <silent>\n", policy)
+    assert validate_reply("<silent>", policy) == []
 
 
 def test_local_example_selection_respects_relevance_and_disabled():
