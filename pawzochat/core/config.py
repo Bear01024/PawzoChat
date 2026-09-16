@@ -33,7 +33,9 @@ from pawzochat.paths import CONFIG_PATH, PROMPTS_DIR
 from pawzochat.transport.models import (
     PROACTIVE_DEFAULTS,
     Persona,
+    normalize_dialog_examples,
     normalize_image_generation,
+    normalize_output_policy,
     normalize_voice_generation,
 )
 
@@ -300,6 +302,28 @@ class ConfigManager:
         )
 
     @classmethod
+    def _load_dialogue_guidance(cls, persona_id: str) -> tuple[list[dict], dict]:
+        """Load structured dialogue examples and the outbound policy."""
+        raw = cls._read_prompt_file(persona_id)
+        return (
+            normalize_dialog_examples(raw.get("dialog_examples")),
+            normalize_output_policy(raw.get("output_policy")),
+        )
+
+    @classmethod
+    def save_dialogue_guidance(
+        cls,
+        persona_id: str,
+        dialog_examples: list[dict],
+        output_policy: dict,
+    ) -> None:
+        """Atomically update guidance fields without touching prompt text."""
+        data = cls._read_prompt_file(persona_id)
+        data["dialog_examples"] = normalize_dialog_examples(dialog_examples)
+        data["output_policy"] = normalize_output_policy(output_policy)
+        cls._atomic_write_prompt_file(persona_id, data)
+
+    @classmethod
     def _load_image_prompt_overrides(cls, persona_id: str) -> dict:
         """Return only image_* fields actually present in the prompt file,
         keyed by the public ``image_generation`` field names so the dict can
@@ -357,6 +381,7 @@ class ConfigManager:
         for pid, pdata in self.get("personas", default={}).items():
             name = pdata.get("name", pid)
             character, examples, system = self._load_prompt_parts(pid)
+            dialog_examples, output_policy = self._load_dialogue_guidance(pid)
 
             tp_raw = pdata.get("tool_policy", {})
             tool_policy = {
@@ -419,6 +444,8 @@ class ConfigManager:
                 image_generation=image_generation,
                 voice_generation=voice_generation,
                 bound_worldbooks=list(pdata.get("bound_worldbooks", [])),
+                dialog_examples=dialog_examples,
+                output_policy=output_policy,
             )
         return result
 

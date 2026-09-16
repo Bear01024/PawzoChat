@@ -368,6 +368,14 @@ async function renderPersonaDetail(data) {
         </div>
       </div>
       <div class="card">
+        <div class="card-header">对话训练数据</div>
+        <div class="card-row"><span class="row-label">长期示例</span><span class="row-value">${(p.dialog_examples || []).length} 条</span></div>
+        <div class="card-row"><span class="row-label">输出规则</span><span class="row-value">${p.output_policy?.enabled ? '已开启' : '未开启'}</span></div>
+        <div class="card-row" style="cursor:pointer" onclick="PawzoChat.pushPage('dialogueImport',{personaId:'${p.id}'})">
+          <span class="row-label">导入并预览历史对话</span><span class="row-arrow">›</span>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-header">主动消息</div>
         <div class="card-row"><span class="row-label">状态</span><span class="row-value">${proEnabled ? '已开启' : '已关闭'}</span></div>
         <div class="card-row"><span class="row-label">触发间隔</span><span class="row-value">${proIntervalText}</span></div>

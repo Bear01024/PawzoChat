@@ -41,7 +41,9 @@ from pawzochat.services import card_parser, persona_card
 from pawzochat.services.worldbook import validate_book_name
 from pawzochat.transport.models import (
     PROACTIVE_DEFAULTS,
+    normalize_dialog_examples,
     normalize_image_generation,
+    normalize_output_policy,
     normalize_voice_generation,
 )
 from pawzochat.web.routes import download_response, get_app, safe_download_stem
@@ -265,6 +267,8 @@ def get_persona(persona_id: str):
         "has_image_ref": load_custom_reference_image(persona_id, p.image_generation) is not None,
         "voice_generation": p.voice_generation,
         "bound_worldbooks": p.bound_worldbooks,
+        "dialog_examples": p.dialog_examples,
+        "output_policy": p.output_policy,
         "wechat_chat_type": link.get("chat_type", "") if link else "",
         "linked_channel": link.get("channel", "") if link else "",
     })
@@ -308,6 +312,11 @@ def create_persona():
             character_prompt=data.get("character_prompt", ""),
             output_examples=data.get("output_examples", ""),
             system_instructions=system_instr,
+        )
+        app.config.save_dialogue_guidance(
+            persona_id,
+            normalize_dialog_examples(data.get("dialog_examples")),
+            normalize_output_policy(data.get("output_policy")),
         )
 
         mem_input = data.get("memory", {})
@@ -540,6 +549,14 @@ def update_persona(persona_id: str):
             if not isinstance(bwb, list):
                 bwb = []
             cfg["bound_worldbooks"] = [str(n) for n in bwb]
+
+        if "dialog_examples" in data or "output_policy" in data:
+            current_persona = app.config.load_personas()[persona_id]
+            app.config.save_dialogue_guidance(
+                persona_id,
+                normalize_dialog_examples(data.get("dialog_examples", current_persona.dialog_examples)),
+                normalize_output_policy(data.get("output_policy", current_persona.output_policy)),
+            )
 
         prompt_fields = ("character_prompt", "output_examples", "system_instructions")
         if any(k in data for k in prompt_fields):

@@ -256,6 +256,7 @@ def create_app(app_instance: App) -> Flask:
 
     from pawzochat.web.routes.api_conversations import api_conversations_bp
     from pawzochat.web.routes.api_personas import api_personas_bp
+    from pawzochat.web.routes.api_dialogue_import import api_dialogue_import_bp
     from pawzochat.web.routes.api_memory import api_memory_bp
     from pawzochat.web.routes.api_settings import api_settings_bp
     from pawzochat.web.routes.api_providers import api_providers_bp
@@ -274,6 +275,7 @@ def create_app(app_instance: App) -> Flask:
 
     flask_app.register_blueprint(api_conversations_bp, url_prefix="/api/conversations")
     flask_app.register_blueprint(api_personas_bp, url_prefix="/api/personas")
+    flask_app.register_blueprint(api_dialogue_import_bp, url_prefix="/api/personas")
     flask_app.register_blueprint(api_memory_bp, url_prefix="/api/personas")
     flask_app.register_blueprint(api_settings_bp, url_prefix="/api/settings")
     flask_app.register_blueprint(api_providers_bp, url_prefix="/api/providers")

@@ -334,6 +334,54 @@ class ConversationStore:
             self._write_file(persona_id, data)
             return msg
 
+    def merge_imported_messages(
+        self, persona_id: str, imported: list[dict],
+    ) -> dict:
+        """Merge history atomically, preserving links and skipping exact duplicates."""
+        lock = self._get_lock(persona_id)
+        with lock:
+            data = self._read_file(persona_id)
+            if data is None:
+                now = _now_iso()
+                data = {
+                    "persona_id": persona_id,
+                    "created_at": now,
+                    "updated_at": now,
+                    "channel_link": None,
+                    "wechat_link": None,
+                    "messages": [],
+                }
+            existing = list(data.get("messages", []))
+            fingerprints = {_message_fingerprint(item) for item in existing}
+            added = []
+            for raw in imported:
+                if not isinstance(raw, dict) or raw.get("role") not in ("user", "assistant"):
+                    continue
+                message = {
+                    "role": raw["role"],
+                    "content": raw.get("content", []),
+                    "source": str(raw.get("source", "import")),
+                    "timestamp": str(raw.get("timestamp", "")) or _now_iso(),
+                }
+                if raw.get("quote"):
+                    message["quote"] = str(raw["quote"])
+                fingerprint = _message_fingerprint(message)
+                if fingerprint in fingerprints:
+                    continue
+                fingerprints.add(fingerprint)
+                existing.append(message)
+                added.append(message)
+            existing.sort(key=lambda item: str(item.get("timestamp", "")))
+            data["messages"] = existing
+            if existing:
+                data["updated_at"] = existing[-1].get("timestamp", "") or _now_iso()
+            self._write_file(persona_id, data)
+            return {
+                "added": len(added),
+                "skipped": len(imported) - len(added),
+                "total": len(existing),
+            }
+
     def get_messages(
         self,
         persona_id: str,

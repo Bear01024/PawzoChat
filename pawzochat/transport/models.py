@@ -123,6 +123,94 @@ def normalize_voice_generation(raw: Any) -> dict:
     }
 
 
+OUTPUT_POLICY_DEFAULTS: dict = {
+    "enabled": False,
+    "max_visible_chars": 30,
+    "max_segments": 3,
+    "preferred_max_segments": 2,
+    "separator": "\\",
+    "forbid_ellipsis": True,
+    "forbid_brackets": True,
+    "forbid_timestamps": True,
+    "banned_terms": ["\u4f5c\u4e3aAI", "\u8bed\u8a00\u6a21\u578b", "\u673a\u5668\u4eba"],
+    "silence_token": "<SILENT>",
+    "rewrite_once": True,
+}
+
+
+def normalize_output_policy(raw: Any) -> dict:
+    """Return a complete, bounded per-persona outbound reply policy."""
+    raw = raw if isinstance(raw, dict) else {}
+    defaults = OUTPUT_POLICY_DEFAULTS
+    try:
+        max_chars = int(raw.get("max_visible_chars", defaults["max_visible_chars"]))
+    except (TypeError, ValueError):
+        max_chars = defaults["max_visible_chars"]
+    try:
+        max_segments = int(raw.get("max_segments", defaults["max_segments"]))
+    except (TypeError, ValueError):
+        max_segments = defaults["max_segments"]
+    try:
+        preferred = int(raw.get("preferred_max_segments", defaults["preferred_max_segments"]))
+    except (TypeError, ValueError):
+        preferred = defaults["preferred_max_segments"]
+    terms = raw.get("banned_terms", defaults["banned_terms"])
+    if not isinstance(terms, list):
+        terms = defaults["banned_terms"]
+    max_segments = max(1, min(20, max_segments))
+    return {
+        "enabled": bool(raw.get("enabled", defaults["enabled"])),
+        "max_visible_chars": max(1, min(2000, max_chars)),
+        "max_segments": max_segments,
+        "preferred_max_segments": max(1, min(max_segments, preferred)),
+        "separator": str(raw.get("separator", defaults["separator"]) or "\\")[:4],
+        "forbid_ellipsis": bool(raw.get("forbid_ellipsis", defaults["forbid_ellipsis"])),
+        "forbid_brackets": bool(raw.get("forbid_brackets", defaults["forbid_brackets"])),
+        "forbid_timestamps": bool(raw.get("forbid_timestamps", defaults["forbid_timestamps"])),
+        "banned_terms": [str(term).strip()[:100] for term in terms[:100] if str(term).strip()],
+        "silence_token": str(raw.get("silence_token", defaults["silence_token"]) or defaults["silence_token"]).strip()[:50],
+        "rewrite_once": bool(raw.get("rewrite_once", defaults["rewrite_once"])),
+    }
+
+
+def normalize_dialog_examples(raw: Any) -> list[dict]:
+    """Validate portable few-shot examples while preserving their order."""
+    if not isinstance(raw, list):
+        return []
+    result: list[dict] = []
+    for item in raw[:2000]:
+        if not isinstance(item, dict):
+            continue
+        users = item.get("user_messages", [])
+        assistants = item.get("assistant_messages", [])
+        if isinstance(users, str):
+            users = [users]
+        if isinstance(assistants, str):
+            assistants = [assistants]
+        users = [str(value).strip()[:4000] for value in users if str(value).strip()]
+        assistants = [str(value).strip()[:4000] for value in assistants if str(value).strip()]
+        if not users or not assistants:
+            continue
+        tags = item.get("scenario_tags", [])
+        keywords = item.get("trigger_keywords", [])
+        try:
+            quality = max(1, min(5, int(item.get("quality", 3))))
+        except (TypeError, ValueError):
+            quality = 3
+        result.append({
+            "id": str(item.get("id", "") or "")[:100],
+            "user_messages": users,
+            "assistant_messages": assistants,
+            "scenario_tags": [str(value).strip()[:100] for value in tags[:30] if str(value).strip()] if isinstance(tags, list) else [],
+            "trigger_keywords": [str(value).strip()[:100] for value in keywords[:50] if str(value).strip()] if isinstance(keywords, list) else [],
+            "quality": quality,
+            "enabled": bool(item.get("enabled", True)),
+            "pinned": bool(item.get("pinned", False)),
+            "source": item.get("source", {}) if isinstance(item.get("source"), dict) else {},
+        })
+    return result
+
+
 class MessageItemType:
     NONE = 0
     TEXT = 1
@@ -313,6 +401,8 @@ class Persona:
     image_generation: dict = field(default_factory=lambda: copy.deepcopy(IMAGE_GENERATION_DEFAULTS))
     voice_generation: dict = field(default_factory=lambda: copy.deepcopy(VOICE_GENERATION_DEFAULTS))
     bound_worldbooks: list[str] = field(default_factory=list)
+    dialog_examples: list[dict] = field(default_factory=list)
+    output_policy: dict = field(default_factory=lambda: copy.deepcopy(OUTPUT_POLICY_DEFAULTS))
 
     @property
     def prompt(self) -> str:

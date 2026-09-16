@@ -114,7 +114,12 @@ import {
 
 import {
   addMemory, editMemory, saveMemory, deleteMemoryConfirm,
+  dialogImportPreview, dialogImportCommit,
 } from "./modules/memory.js";
+
+import {
+  dialogImportPreview, dialogImportCommit,
+} from "./modules/dialogue_import.js";
 
 import {
   mcpTransportChange,

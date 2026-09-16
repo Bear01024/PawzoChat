@@ -32,6 +32,13 @@ from typing import TYPE_CHECKING
 from pawzochat.image.providers.novelai_image import is_novelai_v4_model
 from pawzochat.image.reference import resolve_reference_images
 from pawzochat.llm.base import ContentBlock, LLMResponse, ToolCall
+from pawzochat.services.dialogue_guidance import (
+    build_example_messages,
+    is_silence_reply,
+    policy_prompt,
+    select_relevant_examples,
+    validate_reply,
+)
 from pawzochat.services.mcp_image_extractor import extract_mcp_images
 from pawzochat.utils.message_text import (
     clean_assistant_reply_text,
@@ -184,6 +191,7 @@ class ChatService:
 
         raw_reply = (response.text if response else None) or ""
         raw_reply = clean_assistant_reply_text(raw_reply)
+        raw_reply = self._apply_output_policy(persona, raw_reply)
 
         do_split_newline = bool(
             self.config.get("reply", "split_by_newline", default=True)
@@ -240,6 +248,73 @@ class ChatService:
         # Returning no drafts lets the dispatcher finish the round without
         # persisting or sending a synthetic fallback message.
         return assistant_messages
+
+    def _apply_output_policy(self, persona, text: str) -> str:
+        """Validate a reply, rewrite once when configured, or suppress it."""
+        policy = getattr(persona, "output_policy", {})
+        if not text or is_silence_reply(text, policy):
+            return ""
+        violations = validate_reply(text, policy)
+        if not violations:
+            return text
+        if not policy.get("rewrite_once", True):
+            logger.warning(
+                "回复违反输出规则且未启用重写 persona=%s violations=%s",
+                persona.id, violations,
+            )
+            return ""
+        rewritten = self._rewrite_policy_reply(persona, text, violations)
+        rewritten = clean_assistant_reply_text(rewritten)
+        if is_silence_reply(rewritten, policy):
+            return ""
+        remaining = validate_reply(rewritten, policy)
+        if remaining:
+            logger.warning(
+                "回复重写后仍违反输出规则，已静默 persona=%s violations=%s",
+                persona.id, remaining,
+            )
+            return ""
+        return rewritten
+
+    def _rewrite_policy_reply(
+        self, persona, original: str, violations: list[str],
+    ) -> str:
+        """Ask the bound provider for one low-temperature policy-only rewrite."""
+        provider = self.llm_manager.get_provider(persona.llm_provider)
+        if provider is None:
+            return ""
+        guidance = policy_prompt(getattr(persona, "output_policy", {}))
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    persona.prompt
+                    + "\n\n"
+                    + guidance
+                    + "\n\n你正在修正一条候选回复。保持原意与角色口吻，"
+                    "只输出修正后的回复；如果本轮确实无需回复，只输出静默标记。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "违规项：" + "；".join(violations)
+                    + "\n候选回复：\n" + original
+                ),
+            },
+        ]
+        try:
+            response = provider.chat(
+                messages,
+                tools=None,
+                model=persona.llm_model or None,
+                temperature=0.2,
+                max_tokens=min(int(persona.max_tokens or 500), 500),
+            )
+        except Exception:
+            logger.exception("回复规则重写失败 persona=%s", persona.id)
+            return ""
+        return (response.text if response else None) or ""
 
     def run_oneshot(
         self,
@@ -595,6 +670,10 @@ class ChatService:
             if mem_guidance:
                 llm_messages.append({"role": "system", "content": mem_guidance})
 
+        output_guidance = policy_prompt(getattr(persona, "output_policy", {}))
+        if output_guidance:
+            llm_messages.append({"role": "system", "content": output_guidance})
+
         # Periodic reminder: if N rounds have passed without a memory
         # recording, nudge the AI to consider whether anything is worth
         # remembering. Only inject when record_memory is actually available
@@ -603,6 +682,13 @@ class ChatService:
             reminder = self.memory_service.check_and_ack_reminder(persona_id)
             if reminder:
                 llm_messages.append({"role": "system", "content": reminder})
+
+        example_query = self._latest_user_text(history)
+        selected_examples = select_relevant_examples(
+            getattr(persona, "dialog_examples", []),
+            example_query,
+        )
+        llm_messages.extend(build_example_messages(selected_examples))
 
         merged: list[dict] = []
         for msg in history:
