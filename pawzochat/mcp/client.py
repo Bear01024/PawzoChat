@@ -34,6 +34,7 @@ import asyncio
 import base64
 import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -83,7 +84,13 @@ def _resolve_app_relative_path(value: str) -> str:
 
 
 def _resolve_stdio_command(command: str) -> str:
-    return _resolve_app_relative_path(str(command or "").strip())
+    value = str(command or "").strip()
+    if (
+        not getattr(sys, "frozen", False)
+        and value.casefold() in {"python", "python3"}
+    ):
+        return sys.executable
+    return _resolve_app_relative_path(value)
 
 
 def _resolve_stdio_args(args: list[Any]) -> list[str]:

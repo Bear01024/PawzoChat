@@ -18,6 +18,9 @@
 
 from __future__ import annotations
 
+import base64
+import json
+import re
 from dataclasses import dataclass, field
 
 # ---- WebSocket gateway opcodes ----
@@ -52,6 +55,32 @@ MSG_TYPE_TEXT = 0
 MSG_TYPE_MARKDOWN = 2
 MSG_TYPE_MEDIA = 7
 MSG_TYPE_QUOTE = 103
+
+_QQ_FACE_TAG_RE = re.compile(
+    r'<faceType=(?P<face_type>\d+),faceId="(?P<face_id>[^"]+)",ext="(?P<ext>[^"]*)">',
+    re.IGNORECASE,
+)
+
+
+def normalize_qq_face_markers(text: str) -> str:
+    """Turn opaque QQ native-face tags into compact semantic descriptions."""
+    def replace(match: re.Match) -> str:
+        face_id = match.group("face_id").strip()
+        label = ""
+        encoded = match.group("ext").strip()
+        if encoded:
+            try:
+                padded = encoded + "=" * (-len(encoded) % 4)
+                payload = json.loads(base64.b64decode(padded, validate=True).decode("utf-8"))
+                if isinstance(payload, dict):
+                    label = str(payload.get("text", "")).strip()[:100]
+            except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+                label = ""
+        if label:
+            return f"[QQ表情：{label}]"
+        return f"[QQ表情 #{face_id}]" if face_id else "[QQ表情]"
+
+    return _QQ_FACE_TAG_RE.sub(replace, str(text or ""))
 
 
 @dataclass
@@ -132,7 +161,7 @@ class QQInboundMessage:
         return cls(
             msg_id=d.get("id", "") or "",
             openid=author.get("user_openid", "") or author.get("id", "") or "",
-            content=d.get("content", "") or "",
+            content=normalize_qq_face_markers(d.get("content", "") or ""),
             timestamp=d.get("timestamp", "") or "",
             attachments=attachments,
             message_type=message_type,
@@ -215,7 +244,9 @@ def _quote_from_elements(msg_elements: list[dict]) -> str:
         return ""
     element = msg_elements[0]
     parts: list[str] = []
-    content = str(element.get("content", "") or "").strip()
+    content = normalize_qq_face_markers(
+        str(element.get("content", "") or ""),
+    ).strip()
     if content:
         parts.append(content)
     for raw in element.get("attachments", []) or []:
